@@ -46,19 +46,20 @@ a file is written as:
 ``` js
 file <file.length as ascii decimal>\n
 <file.content>\n
-<file.length as ascii decimal>\n
-<hash(file.content) as ascii hex>\n\n
+<file.length as ascii decimal>\n\n
 ```
-file hash is written after the content, so it is possible to stream the file into the format without hashing it first.
-(but the length can be written first because it's already known by `fs.stat(file.name)`). length is written at both ends
-so it's possible to scan the file forwards and reverse, because that is necessary for tree object (next section) and
+writing the content with a length at both ends means it's possible to scan the file in forward and reverse,
+because that is necessary for processing the tree object (next section) and
 doing both the same way means it's possible to use the same routines for writing and reading both types of object.
 
-the hash is followed by a double newline, so that separations between files are visually obvious when inspecting a raw file.
+the file content is hashed as it goes past into the archive, which will be used in the tree.
 
-by putting the length and hash in a readable format it means it's possible to view archive text files in a text
-editor/viewer which makes implementation much more accessable.
-Implementing the protocol would be accessable even in a language as simple as bash.
+the second length is followed by a double newline, so that separations between files are visually obvious when inspecting a raw file.
+
+by using a readable framing it means it's possible to view archived
+text files in an ordinary editor which makes implementation much more
+accessable. Implementing the protocol would be accessable even in a
+language as limited as bash.
 
 ### directory tree
 
@@ -72,7 +73,7 @@ tree <length as ascii>\n
 <tree content as json literal array with one key per line and indentation as follows*:
 [
   {
-    "hash": <hash>,
+    "hash": <hash of file>,
     "mode": <mode as integer>,
     "name": <filename as string>,
     "size": <bytes as integer>
@@ -81,14 +82,13 @@ tree <length as ascii>\n
   },
   ...
 ]>\n
-<length as ascii decimal>\n 
-<hash>\n\n
+<length as ascii decimal>\n\n 
 ```
 
 > \* i.e. stringify with JSON.stringify(tree, null, 2)
 
 by using json format for the trees then it is not necessary to implement a more complex parser than something to handle
-`<type> <length>\n<content>\n<length>\n<hash>\n\n`
+`<type> <length>\n<content>\n<length>\n\n`
 
 the <size> field should be the size of the content of the files, the same numbers as where written out in the framing
 of those files.
@@ -102,7 +102,7 @@ objects are written to the file in topological order, leaves (files) before dire
 this has advantages when both reading and writing. first the directory is read to get file names,
 and then the files processed in aphabetical order. Call stat on the file to get the mode and length,
 write the length then `\n`, then stream the file to the archive (hashing it as it goes past),
-then write another `\n`, the hash, then `\n\n`. keep track of how many bytes are written,
+then write another `\n\n` to mark the end of that object. keep track of how many bytes are written,
 including if a file is a subdirectory.
 
 write out all the files in the directory in this way, and then write the data you have collected about that directory,
@@ -136,3 +136,5 @@ operating system later.
 * since this depends on hashes, which may need to be upgraded at some point, should be have a first header
   that specifies the hash algorithm? could just be `hash <alg, for example sha256> <length in bytes>\n`
   at the start of the archive.
+* would it be simpler to remove the hashes entirely?
+  (would have to figure out the algorithm for finding the content relative to the tree...)
